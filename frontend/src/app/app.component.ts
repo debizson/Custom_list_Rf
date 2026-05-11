@@ -67,6 +67,7 @@ export class AppComponent implements OnInit {
   activeView: 'auth' | 'app' = 'auth';
   priceCompareQuery = '';
   priceCompareSuggestions: ProductSuggestion[] = [];
+  priceCompareActiveSuggestionIndex = -1;
   priceCompareResult: PriceComparisonResult | null = null;
   isLoadingPriceCompare = false;
   isLoadingPriceSuggestions = false;
@@ -263,9 +264,11 @@ export class AppComponent implements OnInit {
 
     if (!searchTerm) {
       this.priceCompareSuggestions = [];
+      this.priceCompareActiveSuggestionIndex = -1;
       return;
     }
 
+    this.priceCompareActiveSuggestionIndex = -1;
     this.isLoadingPriceSuggestions = true;
 
     this.priceCompareService
@@ -278,17 +281,67 @@ export class AppComponent implements OnInit {
           }
 
           this.priceCompareSuggestions = suggestions;
+          this.priceCompareActiveSuggestionIndex = suggestions.length > 0 ? 0 : -1;
         },
         error: () => {
           this.priceCompareSuggestions = [];
+          this.priceCompareActiveSuggestionIndex = -1;
         }
       });
   }
 
+  onPriceCompareKeydown(event: KeyboardEvent): void {
+    if (this.priceCompareSuggestions.length === 0) {
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      this.applyPriceSuggestion(this.priceCompareSuggestions[0], false);
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.priceCompareActiveSuggestionIndex =
+        (this.priceCompareActiveSuggestionIndex + 1) %
+        this.priceCompareSuggestions.length;
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.priceCompareActiveSuggestionIndex =
+        this.priceCompareActiveSuggestionIndex <= 0
+          ? this.priceCompareSuggestions.length - 1
+          : this.priceCompareActiveSuggestionIndex - 1;
+      return;
+    }
+
+    if (event.key === 'Enter' && this.priceCompareActiveSuggestionIndex >= 0) {
+      event.preventDefault();
+      this.applyPriceSuggestion(
+        this.priceCompareSuggestions[this.priceCompareActiveSuggestionIndex],
+        true
+      );
+    }
+  }
+
   selectPriceSuggestion(suggestion: ProductSuggestion): void {
+    this.applyPriceSuggestion(suggestion, true);
+  }
+
+  private applyPriceSuggestion(
+    suggestion: ProductSuggestion,
+    shouldCompare: boolean
+  ): void {
     this.priceCompareQuery = suggestion.name;
     this.priceCompareSuggestions = [];
-    this.compareGuestProduct();
+    this.priceCompareActiveSuggestionIndex = -1;
+
+    if (shouldCompare) {
+      this.compareGuestProduct();
+    }
   }
 
   compareGuestProduct(): void {

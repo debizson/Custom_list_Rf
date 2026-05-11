@@ -533,8 +533,13 @@ button:disabled {
   border-bottom: 0;
 }
 
-.suggestion-list button:hover {
+.suggestion-list button:hover,
+.suggestion-list button.active {
   background: #eefcf8;
+}
+
+.suggestion-list button.active {
+  color: #0f766e;
 }
 
 .suggestion-list span {
@@ -723,8 +728,13 @@ button:disabled {
   color: #f8fafc;
 }
 
-.dark-mode .suggestion-list button:hover {
+.dark-mode .suggestion-list button:hover,
+.dark-mode .suggestion-list button.active {
   background: #12322f;
+}
+
+.dark-mode .suggestion-list button.active {
+  color: #5eead4;
 }
 
 .dark-mode .suggestion-list small {

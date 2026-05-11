@@ -377,6 +377,7 @@
               autocomplete="off"
               [ngModel]="priceCompareQuery"
               (ngModelChange)="onPriceCompareTermChange($event)"
+              (keydown)="onPriceCompareKeydown($event)"
             />
 
             <div
@@ -385,7 +386,8 @@
             >
               <button
                 type="button"
-                *ngFor="let suggestion of priceCompareSuggestions"
+                *ngFor="let suggestion of priceCompareSuggestions; let suggestionIndex = index"
+                [class.active]="suggestionIndex === priceCompareActiveSuggestionIndex"
                 (click)="selectPriceSuggestion(suggestion)"
               >
                 <span>{{ suggestion.name }}</span>
