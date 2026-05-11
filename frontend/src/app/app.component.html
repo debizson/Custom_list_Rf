@@ -1,0 +1,545 @@
+<main
+  class="app-shell"
+  *ngIf="currentUser && activeView === 'app'; else authPage"
+  [class.dark-mode]="isDarkMode"
+>
+  <button
+    class="theme-toggle"
+    type="button"
+    [attr.aria-label]="isDarkMode ? 'Vilagos mod bekapcsolasa' : 'Sotet mod bekapcsolasa'"
+    (click)="toggleTheme()"
+  >
+    <svg
+      *ngIf="!isDarkMode"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+    <svg
+      *ngIf="isDarkMode"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="4"
+        stroke="currentColor"
+        stroke-width="2"
+      />
+      <path
+        d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+      />
+    </svg>
+  </button>
+
+  <div class="snackbar" *ngIf="snackbarMessage" role="status" aria-live="polite">
+    {{ snackbarMessage }}
+  </div>
+
+  <section class="app-frame">
+    <aside class="sidebar" aria-label="Bevasarlolistak">
+      <header class="sidebar-header">
+        <div>
+          <p class="eyebrow">Shopping lists</p>
+          <h1>{{ title }}</h1>
+        </div>
+        <span>{{ lists.length }}</span>
+      </header>
+
+      <div class="user-panel">
+        <strong>{{ currentUser.name }}</strong>
+        <span>{{ currentUser.email }}</span>
+        <small>{{ currentUser.role === 'admin' ? 'Admin' : 'Felhasznalo' }}</small>
+      </div>
+
+      <div class="sidebar-actions">
+        <button type="button" *ngIf="isAdmin" (click)="toggleAdminPanel()">
+          {{ showAdminPanel ? 'Listak' : 'Admin' }}
+        </button>
+        <button class="ghost" type="button" (click)="logout()">Kijelentkezes</button>
+      </div>
+
+      <ng-container *ngIf="!showAdminPanel">
+        <form class="list-form" (ngSubmit)="createList()">
+          <label for="listName">Uj lista</label>
+          <div class="input-action">
+            <input
+              id="listName"
+              name="listName"
+              type="text"
+              placeholder="Heti bevasarlas"
+              [(ngModel)]="newListName"
+            />
+            <button type="submit" aria-label="Lista hozzaadasa">+</button>
+          </div>
+        </form>
+
+        <div class="search-field">
+          <label for="listSearch">Kereses a listak kozott</label>
+          <input
+            id="listSearch"
+            name="listSearch"
+            type="search"
+            placeholder="Lista neve..."
+            [(ngModel)]="listSearchTerm"
+          />
+        </div>
+
+        <form class="catalog-form" (ngSubmit)="createCategory()">
+          <label for="categoryName">Uj kategoria</label>
+          <div class="input-action">
+            <input
+              id="categoryName"
+              name="categoryName"
+              type="text"
+              placeholder="pl. Gyumolcs"
+              [(ngModel)]="newCategoryName"
+            />
+            <button type="submit" aria-label="Kategoria hozzaadasa">+</button>
+          </div>
+        </form>
+
+        <form class="catalog-form" (ngSubmit)="createStore()">
+          <label for="storeName">Uj bolt</label>
+          <div class="input-action">
+            <input
+              id="storeName"
+              name="storeName"
+              type="text"
+              placeholder="pl. Lidl"
+              [(ngModel)]="newStoreName"
+            />
+            <button type="submit" aria-label="Bolt hozzaadasa">+</button>
+          </div>
+        </form>
+
+        <p class="muted" *ngIf="isLoadingLists">Listak betoltese...</p>
+
+        <nav class="list-nav" *ngIf="!isLoadingLists && filteredLists.length > 0">
+          <button
+            class="list-link"
+            type="button"
+            *ngFor="let list of filteredLists"
+            [class.active]="selectedList?._id === list._id"
+            (click)="selectList(list)"
+          >
+            <span class="list-mark">{{ list.name.slice(0, 1).toUpperCase() }}</span>
+            <span class="list-text">
+              <strong>{{ list.name }}</strong>
+              <small>
+                {{ storeName(list.storeId) || 'Nincs bolt' }} -
+                {{ list.createdAt | date: 'yyyy. MM. dd.' }}
+              </small>
+            </span>
+          </button>
+        </nav>
+
+        <div class="empty-sidebar" *ngIf="!isLoadingLists && lists.length === 0">
+          <strong>Nincs meg listad</strong>
+          <span>Hozz letre egy listat a kezdeshez.</span>
+        </div>
+
+        <div
+          class="empty-sidebar"
+          *ngIf="!isLoadingLists && lists.length > 0 && filteredLists.length === 0"
+        >
+          <strong>Nincs talalat</strong>
+          <span>Probald masik lista nevvel.</span>
+        </div>
+      </ng-container>
+    </aside>
+
+    <section class="content" aria-label="Tartalom">
+      <p class="alert" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+      <ng-container *ngIf="showAdminPanel && isAdmin; else shoppingPanel">
+        <header class="content-header">
+          <div>
+            <p class="eyebrow">Admin manager</p>
+            <h2>Felhasznalok</h2>
+          </div>
+          <button type="button" (click)="loadAdminUsers()">Frissites</button>
+        </header>
+
+        <p class="muted" *ngIf="isLoadingAdminUsers">Felhasznalok betoltese...</p>
+
+        <section class="admin-users" *ngIf="!isLoadingAdminUsers">
+          <article class="user-row" *ngFor="let user of adminUsers">
+            <div>
+              <strong>{{ user.name }}</strong>
+              <span>{{ user.email }}</span>
+            </div>
+            <span>{{ user.role }}</span>
+            <span>{{ user.createdAt | date: 'yyyy. MM. dd. HH:mm' }}</span>
+            <button
+              class="delete-button"
+              type="button"
+              [disabled]="user._id === currentUser._id"
+              (click)="deleteUser(user)"
+            >
+              Torles
+            </button>
+          </article>
+        </section>
+      </ng-container>
+
+      <ng-template #shoppingPanel>
+        <ng-container *ngIf="selectedList; else noListSelected">
+          <header class="content-header">
+            <div>
+              <p class="eyebrow">Aktualis lista</p>
+              <h2>{{ selectedList.name }}</h2>
+              <label class="inline-label" for="selectedListStore">Bolt</label>
+              <select
+                id="selectedListStore"
+                name="selectedListStore"
+                class="list-store-select"
+                [ngModel]="selectedList.storeId || ''"
+                (ngModelChange)="updateSelectedListStore($event)"
+              >
+                <option value="">Nincs bolt</option>
+                <option *ngFor="let store of stores" [value]="store._id">
+                  {{ store.name }}
+                </option>
+              </select>
+            </div>
+
+            <button class="ghost-danger" type="button" (click)="deleteSelectedList()">
+              Lista torlese
+            </button>
+          </header>
+
+          <section class="stats" aria-label="Lista statisztika">
+            <div>
+              <span>Osszes elem</span>
+              <strong>{{ items.length }}</strong>
+            </div>
+            <div>
+              <span>Kesz</span>
+              <strong>{{ completedCount }}</strong>
+            </div>
+            <div>
+              <span>Becsult osszeg</span>
+              <strong>{{ totalPrice | number: '1.0-0' }} Ft</strong>
+            </div>
+          </section>
+
+          <form class="item-form" (ngSubmit)="createItem()">
+            <div class="field product-field">
+              <label for="itemName">Termek</label>
+              <input
+                id="itemName"
+                name="itemName"
+                type="text"
+                placeholder="Tej"
+                [(ngModel)]="newItemName"
+              />
+            </div>
+
+            <div class="field">
+              <label for="itemQuantity">Mennyiseg</label>
+              <input
+                id="itemQuantity"
+                name="itemQuantity"
+                type="number"
+                min="1"
+                [(ngModel)]="newItemQuantity"
+              />
+            </div>
+
+            <div class="field">
+              <label for="itemPrice">Ar</label>
+              <input
+                id="itemPrice"
+                name="itemPrice"
+                type="number"
+                min="0"
+                [(ngModel)]="newItemPrice"
+              />
+            </div>
+
+            <div class="field">
+              <label for="itemCategory">Kategoria</label>
+              <select
+                id="itemCategory"
+                name="itemCategory"
+                [(ngModel)]="newItemCategoryId"
+              >
+                <option value="">Nincs kategoria</option>
+                <option *ngFor="let category of categories" [value]="category._id">
+                  {{ category.name }}
+                </option>
+              </select>
+            </div>
+
+            <button type="submit">Hozzaad</button>
+          </form>
+
+          <p class="muted" *ngIf="isLoadingItems">Elemek betoltese...</p>
+
+          <section class="items" *ngIf="!isLoadingItems && items.length > 0">
+            <article
+              class="item-row"
+              *ngFor="let item of items; trackBy: trackByItemId"
+              [class.done]="item.completed"
+              [class.dragging]="draggingItemId === item._id"
+              [class.drop-target]="dragOverItemId === item._id"
+              (dragover)="moveItemOver($event, item)"
+              (dragleave)="leaveItem(item)"
+              (drop)="dropItem($event, item)"
+            >
+              <button
+                class="drag-handle"
+                type="button"
+                draggable="true"
+                aria-label="Elem huzasa masik pozicioba"
+                (dragstart)="startItemDrag($event, item)"
+                (dragend)="finishItemDrag()"
+              >
+                ::
+              </button>
+
+              <button
+                class="check-button"
+                type="button"
+                [attr.aria-label]="item.completed ? 'Visszajeloles' : 'Keszre jeloles'"
+                [attr.aria-pressed]="item.completed"
+                (click)="toggleItem(item)"
+              >
+                {{ item.completed ? '✓' : '' }}
+              </button>
+
+              <div class="item-info">
+                <strong>{{ item.name }}</strong>
+                <span>
+                  {{ item.quantity }} db x {{ item.price | number: '1.0-0' }} Ft
+                  <ng-container *ngIf="categoryName(item.categoryId)">
+                    - {{ categoryName(item.categoryId) }}
+                  </ng-container>
+                </span>
+              </div>
+
+              <strong class="row-total">
+                {{ item.quantity * item.price | number: '1.0-0' }} Ft
+              </strong>
+
+              <button
+                class="delete-button"
+                type="button"
+                aria-label="Elem torlese"
+                (click)="deleteItem(item)"
+              >
+                Torles
+              </button>
+            </article>
+          </section>
+
+          <div class="empty-content" *ngIf="!isLoadingItems && items.length === 0">
+            <h3>Ez a lista meg ures</h3>
+            <p>Add hozza az elso termeket a fenti mezokkel.</p>
+          </div>
+        </ng-container>
+      </ng-template>
+    </section>
+  </section>
+</main>
+
+<ng-template #authPage>
+  <main class="auth-shell">
+    <section class="price-compare-panel" aria-label="Guest ar-osszehasonlito">
+      <div>
+        <p class="eyebrow">Guest mode</p>
+        <h1>Ar-osszehasonlito</h1>
+      </div>
+
+      <form class="price-compare-form" (ngSubmit)="compareGuestProduct()">
+        <label for="priceCompareQuery">Termek keresese</label>
+        <div class="price-compare-search">
+          <div class="suggestion-field">
+            <input
+              id="priceCompareQuery"
+              name="priceCompareQuery"
+              type="search"
+              placeholder="Kezdj el gepelni..."
+              autocomplete="off"
+              [ngModel]="priceCompareQuery"
+              (ngModelChange)="onPriceCompareTermChange($event)"
+            />
+
+            <div
+              class="suggestion-list"
+              *ngIf="priceCompareSuggestions.length > 0"
+            >
+              <button
+                type="button"
+                *ngFor="let suggestion of priceCompareSuggestions"
+                (click)="selectPriceSuggestion(suggestion)"
+              >
+                <span>{{ suggestion.name }}</span>
+                <small>{{ suggestion.count }} elofordulas</small>
+              </button>
+            </div>
+          </div>
+          <button type="submit" [disabled]="isLoadingPriceCompare">
+            {{ isLoadingPriceCompare ? 'Kereses...' : 'Kikeres' }}
+          </button>
+        </div>
+
+        <p class="hint" *ngIf="isLoadingPriceSuggestions">Javaslatok betoltese...</p>
+        <p class="alert" *ngIf="priceCompareErrorMessage">
+          {{ priceCompareErrorMessage }}
+        </p>
+      </form>
+
+      <section
+        class="price-results"
+        *ngIf="priceCompareResult && priceCompareResult.totalOccurrences > 0"
+      >
+        <header class="price-results-header">
+          <div>
+            <span>Termek</span>
+            <strong>{{ priceCompareResult.productName }}</strong>
+          </div>
+          <div>
+            <span>Talalat</span>
+            <strong>{{ priceCompareResult.totalOccurrences }}</strong>
+          </div>
+        </header>
+
+        <article
+          class="price-row"
+          *ngFor="
+            let occurrence of priceCompareResult.occurrences;
+            trackBy: trackByPriceOccurrenceId
+          "
+          [class.expensive]="occurrence.priceRank === 'highest'"
+          [class.cheap]="occurrence.priceRank === 'lowest'"
+        >
+          <div class="price-row-main">
+            <strong>{{ occurrence.productName }}</strong>
+            <span>{{ occurrence.storeName }}</span>
+          </div>
+          <div class="price-row-meta">
+            <strong>{{ occurrence.price | number: '1.0-0' }} Ft</strong>
+            <span>{{ occurrence.quantity }} db - {{ occurrence.listName }}</span>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="auth-panel">
+      <p class="eyebrow">Shopping list auth</p>
+      <h1>{{ authMode === 'login' ? 'Bejelentkezes' : 'Regisztracio' }}</h1>
+
+      <form class="auth-form" (ngSubmit)="submitAuth()">
+        <label for="authName" *ngIf="authMode === 'register'">Nev</label>
+        <input
+          id="authName"
+          name="authName"
+          type="text"
+          *ngIf="authMode === 'register'"
+          [(ngModel)]="authName"
+        />
+
+        <label for="authEmail">Email</label>
+        <input
+          id="authEmail"
+          name="authEmail"
+          type="email"
+          [(ngModel)]="authEmail"
+        />
+
+        <label for="authPassword">Jelszo</label>
+        <div class="password-input">
+          <input
+            id="authPassword"
+            name="authPassword"
+            [type]="showAuthPassword ? 'text' : 'password'"
+            minlength="6"
+            [(ngModel)]="authPassword"
+          />
+          <button
+            class="visibility-button"
+            type="button"
+            (click)="showAuthPassword = !showAuthPassword"
+          >
+            {{ showAuthPassword ? 'Elrejt' : 'Mutat' }}
+          </button>
+        </div>
+
+        <ng-container *ngIf="authMode === 'register'">
+          <label for="authPasswordConfirm">Jelszo ujra</label>
+          <div class="password-input">
+            <input
+              id="authPasswordConfirm"
+              name="authPasswordConfirm"
+              [type]="showAuthPasswordConfirm ? 'text' : 'password'"
+              minlength="6"
+              [(ngModel)]="authPasswordConfirm"
+            />
+            <button
+              class="visibility-button"
+              type="button"
+              (click)="showAuthPasswordConfirm = !showAuthPasswordConfirm"
+            >
+              {{ showAuthPasswordConfirm ? 'Elrejt' : 'Mutat' }}
+            </button>
+          </div>
+
+          <p class="hint success" *ngIf="passwordsMatch">
+            A ket jelszo egyezik.
+          </p>
+          <p class="alert" *ngIf="passwordsDoNotMatch">
+            A ket jelszo nem egyezik.
+          </p>
+        </ng-container>
+
+        <p class="alert" *ngIf="authErrorMessage">{{ authErrorMessage }}</p>
+
+        <button
+          type="submit"
+          [disabled]="isAuthLoading || (authMode === 'register' && authPassword !== authPasswordConfirm)"
+        >
+          {{ isAuthLoading ? 'Folyamatban...' : authMode === 'login' ? 'Belepes' : 'Regisztralok' }}
+        </button>
+      </form>
+
+      <button
+        class="text-button"
+        type="button"
+        (click)="switchAuthMode(authMode === 'login' ? 'register' : 'login')"
+      >
+        {{ authMode === 'login' ? 'Nincs fiokod? Regisztralj' : 'Van fiokod? Jelentkezz be' }}
+      </button>
+
+      <button
+        class="text-button"
+        type="button"
+        *ngIf="currentUser"
+        (click)="continueToApp()"
+      >
+        Vissza az alkalmazasba
+      </button>
+    </section>
+  </main>
+</ng-template>
+
+<ng-template #noListSelected>
+  <div class="empty-content fill">
+    <h2>Valassz vagy hozz letre egy listat</h2>
+    <p>A kivalasztott lista elemei itt jelennek meg.</p>
+  </div>
+</ng-template>
